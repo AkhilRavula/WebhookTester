@@ -1,0 +1,48 @@
+@page "{webhookId:guid}/Requests/{requestId:int}"
+@model WebhookTester.Pages.Webhooks.RequestModel
+@{
+    ViewData["Title"] = "Request Details";
+}
+
+<div>
+    <a asp-page="./Details" asp-route-id="@Model.WebhookRequest.WebhookId">Back to Webhook</a>
+</div>
+
+<h4 class="mt-3">Request Details</h4>
+<hr />
+
+<dl class="row">
+    <dt class="col-sm-2">Received At</dt>
+    <dd class="col-sm-10">@Model.WebhookRequest.ReceivedAt.ToString("yyyy-MM-dd HH:mm:ss") UTC</dd>
+
+    <dt class="col-sm-2">Method</dt>
+    <dd class="col-sm-10">@Model.WebhookRequest.Method</dd>
+
+    <dt class="col-sm-2">Path</dt>
+    <dd class="col-sm-10">@Model.WebhookRequest.Path</dd>
+
+    <dt class="col-sm-2">Query String</dt>
+    <dd class="col-sm-10">@Model.WebhookRequest.QueryString</dd>
+
+    <dt class="col-sm-2">Client IP</dt>
+    <dd class="col-sm-10">@Model.WebhookRequest.ClientIp</dd>
+
+    <dt class="col-sm-2">Content Type</dt>
+    <dd class="col-sm-10">@Model.WebhookRequest.ContentType</dd>
+</dl>
+
+<h5>Headers</h5>
+<pre class="bg-light p-3 border">@Model.WebhookRequest.Headers</pre>
+
+<h5>Body</h5>
+@if (Model.WebhookRequest.IsBodyBase64Encoded)
+{
+    <div class="alert alert-warning">
+        This body is binary or unsupported encoding. Stored as Base64.
+    </div>
+    <pre class="bg-light p-3 border">@Model.WebhookRequest.Body</pre>
+}
+else
+{
+    <pre class="bg-light p-3 border" style="white-space: pre-wrap;">@Model.WebhookRequest.Body</pre>
+}

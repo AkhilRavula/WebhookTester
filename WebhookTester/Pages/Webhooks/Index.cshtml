@@ -1,0 +1,41 @@
+@page
+@model WebhookTester.Pages.Webhooks.IndexModel
+@{
+    ViewData["Title"] = "All Webhooks";
+}
+
+<h1>All Webhooks</h1>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Description</th>
+            <th>Created At</th>
+            <th>Protected</th>
+            <th>Last Request</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Model.Webhooks)
+        {
+            <tr>
+                <td>
+                    <a asp-page="./Details" asp-route-id="@item.Id">@item.Id</a>
+                </td>
+                <td>@item.Description</td>
+                <td>@item.CreatedAt.ToString("g")</td>
+                <td>@(item.HasPassword ? "Yes" : "No")</td>
+                <td>@item.LastRequestAt?.ToString("g")</td>
+                <td>
+                    <a asp-page="./Details" asp-route-id="@item.Id">Details</a>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<div class="mt-3">
+    <a asp-page="/Index">Create New Webhook</a>
+</div>
