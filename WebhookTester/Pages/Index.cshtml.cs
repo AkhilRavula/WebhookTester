@@ -3,16 +3,18 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.ComponentModel.DataAnnotations;
 using WebhookTester.Data;
 using WebhookTester.Models;
+using WebhookTester.Services;
 
 namespace WebhookTester.Pages
 {
     public class IndexModel : PageModel
     {
-        private readonly WebhookContext _context;
+        // SQLite: private readonly WebhookContext _context;
+        private readonly S3StorageService _s3Storage;
 
-        public IndexModel(WebhookContext context)
+        public IndexModel(S3StorageService s3Storage)
         {
-            _context = context;
+            _s3Storage = s3Storage;
         }
 
         [BindProperty]
@@ -53,8 +55,9 @@ namespace WebhookTester.Pages
                 webhook.PasswordHash = Input.Password;
             }
 
-            _context.WebhookEndpoints.Add(webhook);
-            await _context.SaveChangesAsync();
+            // SQLite: _context.WebhookEndpoints.Add(webhook);
+            // SQLite: await _context.SaveChangesAsync();
+            await _s3Storage.SaveEndpointAsync(webhook);
 
             return RedirectToPage("/Webhooks/Details", new { id = webhook.Id });
         }

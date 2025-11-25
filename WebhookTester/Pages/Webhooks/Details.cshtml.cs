@@ -3,16 +3,18 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using WebhookTester.Data;
 using WebhookTester.Models;
+using WebhookTester.Services;
 
 namespace WebhookTester.Pages.Webhooks
 {
     public class DetailsModel : PageModel
     {
-        private readonly WebhookContext _context;
+        // SQLite: private readonly WebhookContext _context;
+        private readonly S3StorageService _s3Storage;
 
-        public DetailsModel(WebhookContext context)
+        public DetailsModel(S3StorageService s3Storage)
         {
-            _context = context;
+            _s3Storage = s3Storage;
         }
 
         public WebhookEndpoint Webhook { get; set; } = default!;
@@ -27,7 +29,8 @@ namespace WebhookTester.Pages.Webhooks
         {
             if (id == null) return NotFound();
 
-            var webhook = await _context.WebhookEndpoints.FirstOrDefaultAsync(m => m.Id == id);
+            // SQLite: var webhook = await _context.WebhookEndpoints.FirstOrDefaultAsync(m => m.Id == id);
+            var webhook = await _s3Storage.GetEndpointAsync(id.Value);
             if (webhook == null) return NotFound();
 
             Webhook = webhook;
@@ -44,10 +47,8 @@ namespace WebhookTester.Pages.Webhooks
             }
 
             // Load requests
-            Requests = await _context.WebhookRequests
-                .Where(r => r.WebhookId == id)
-                .OrderByDescending(r => r.ReceivedAt)
-                .ToListAsync();
+            // SQLite: Requests = await _context.WebhookRequests.Where(r => r.WebhookId == id).OrderByDescending(r => r.ReceivedAt).ToListAsync();
+            Requests = await _s3Storage.ListRequestsAsync(id.Value);
 
             return Page();
         }
@@ -56,7 +57,8 @@ namespace WebhookTester.Pages.Webhooks
         {
             if (id == null) return NotFound();
 
-            var webhook = await _context.WebhookEndpoints.FindAsync(id);
+            // SQLite: var webhook = await _context.WebhookEndpoints.FindAsync(id);
+            var webhook = await _s3Storage.GetEndpointAsync(id.Value);
             if (webhook == null) return NotFound();
 
             Webhook = webhook;
@@ -84,7 +86,8 @@ namespace WebhookTester.Pages.Webhooks
         public async Task<IActionResult> OnPostDeleteWebhookAsync(Guid? id)
         {
             if (id == null) return NotFound();
-            var webhook = await _context.WebhookEndpoints.FindAsync(id);
+            // SQLite: var webhook = await _context.WebhookEndpoints.FindAsync(id);
+            var webhook = await _s3Storage.GetEndpointAsync(id.Value);
             if (webhook == null) return NotFound();
 
             if (webhook.HasPassword && HttpContext.Session.GetString($"Access_{id}") != "true")
@@ -92,8 +95,9 @@ namespace WebhookTester.Pages.Webhooks
                 return RedirectToPage(new { id });
             }
 
-            _context.WebhookEndpoints.Remove(webhook);
-            await _context.SaveChangesAsync();
+            // SQLite: _context.WebhookEndpoints.Remove(webhook);
+            // SQLite: await _context.SaveChangesAsync();
+            await _s3Storage.DeleteEndpointAsync(id.Value);
 
             return RedirectToPage("./Index");
         }
@@ -101,7 +105,8 @@ namespace WebhookTester.Pages.Webhooks
         public async Task<IActionResult> OnPostClearRequestsAsync(Guid? id)
         {
             if (id == null) return NotFound();
-            var webhook = await _context.WebhookEndpoints.FindAsync(id);
+            // SQLite: var webhook = await _context.WebhookEndpoints.FindAsync(id);
+            var webhook = await _s3Storage.GetEndpointAsync(id.Value);
             if (webhook == null) return NotFound();
 
             if (webhook.HasPassword && HttpContext.Session.GetString($"Access_{id}") != "true")
@@ -109,9 +114,16 @@ namespace WebhookTester.Pages.Webhooks
                 return RedirectToPage(new { id });
             }
 
-            var requests = await _context.WebhookRequests.Where(r => r.WebhookId == id).ToListAsync();
-            _context.WebhookRequests.RemoveRange(requests);
-            await _context.SaveChangesAsync();
+            // SQLite: var requests = await _context.WebhookRequests.Where(r => r.WebhookId == id).ToListAsync();
+            // SQLite: _context.WebhookRequests.RemoveRange(requests);
+            // SQLite: await _context.SaveChangesAsync();
+            
+            // S3: Get all requests and delete them
+            var requests = await _s3Storage.ListRequestsAsync(id.Value);
+            foreach (var request in requests)
+            {
+                await _s3Storage.DeleteWebhookRequestAsync(id.Value, request.Id);
+            }
 
             return RedirectToPage(new { id });
         }

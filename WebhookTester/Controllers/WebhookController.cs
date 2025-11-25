@@ -7,6 +7,7 @@ using System.Text.Json;
 using WebhookTester.Data;
 using WebhookTester.Hubs;
 using WebhookTester.Models;
+using WebhookTester.Services;
 
 namespace WebhookTester.Controllers
 {
@@ -14,12 +15,15 @@ namespace WebhookTester.Controllers
     [ApiController]
     public class WebhookController : ControllerBase
     {
-        private readonly WebhookContext _context;
+        // SQLite Database Context - COMMENTED OUT (using S3 storage instead)
+        // private readonly WebhookContext _context;
+        
+        private readonly S3StorageService _s3Storage;
         private readonly IHubContext<WebhookHub> _hubContext;
 
-        public WebhookController(WebhookContext context, IHubContext<WebhookHub> hubContext)
+        public WebhookController(S3StorageService s3Storage, IHubContext<WebhookHub> hubContext)
         {
-            _context = context;
+            _s3Storage = s3Storage;
             _hubContext = hubContext;
         }
 
@@ -28,7 +32,8 @@ namespace WebhookTester.Controllers
         [AcceptVerbs("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD")]
         public async Task<IActionResult> Receive(Guid id, string? path)
         {
-            var endpoint = await _context.WebhookEndpoints.FindAsync(id);
+            // SQLite: var endpoint = await _context.WebhookEndpoints.FindAsync(id);
+            var endpoint = await _s3Storage.GetEndpointAsync(id);
             if (endpoint == null || !endpoint.IsActive)
             {
                 return NotFound();
@@ -53,7 +58,7 @@ namespace WebhookTester.Controllers
                     }
                 }
 
-                if (string.IsNullOrEmpty(eventSigningSignature) || CheckForSignature(eventSigningSignature, endpoint.PasswordHash, bodyBytes))
+                if (string.IsNullOrEmpty(eventSigningSignature) || CheckForSignature(eventSigningSignature, endpoint.PasswordHash ?? string.Empty, bodyBytes))
                 {
                     return Unauthorized("Invalid or missing signature.");
                 }
@@ -93,9 +98,14 @@ namespace WebhookTester.Controllers
                 requestRecord.IsBodyBase64Encoded = false;
             }
 
-            _context.WebhookRequests.Add(requestRecord);
+            // SQLite: _context.WebhookRequests.Add(requestRecord);
+            // SQLite: endpoint.LastRequestAt = DateTime.UtcNow;
+            // SQLite: await _context.SaveChangesAsync();
+            
+            // S3: Save request and update endpoint
+            await _s3Storage.SaveWebhookRequestAsync(requestRecord);
             endpoint.LastRequestAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync();
+            await _s3Storage.UpdateEndpointAsync(endpoint);
 
             // Notify clients
             await _hubContext.Clients.Group(id.ToString()).SendAsync("ReceiveRequest", new 

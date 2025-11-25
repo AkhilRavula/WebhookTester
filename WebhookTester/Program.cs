@@ -4,6 +4,7 @@ using WebhookTester.Hubs;
 using WebhookTester.Services;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Options;
+using Amazon.S3;
 
 namespace WebhookTester
 {
@@ -26,29 +27,31 @@ namespace WebhookTester
                 options.Cookie.HttpOnly = true;
                 options.Cookie.IsEssential = true;
             });
-            builder.Services.AddDbContext<WebhookContext>(options =>
-                options.UseSqlite(builder.Configuration.GetConnectionString("WebhookContext")));
-           // builder.Services.AddDataProtection().PersistKeysToDbContext<WebhookContext>();
+            
+            // AWS S3 Service for webhook storage
+            builder.Services.AddAWSService<IAmazonS3>();
+            builder.Services.AddSingleton<S3StorageService>();
+            
+            // SQLite Database (COMMENTED OUT - using S3 instead)
+            // builder.Services.AddDbContext<WebhookContext>(options =>
+            //     options.UseSqlite(builder.Configuration.GetConnectionString("WebhookContext")));
+            // builder.Services.AddDataProtection().PersistKeysToDbContext<WebhookContext>();
 
             var app = builder.Build();
 
-
-            using(var scope = app.Services.CreateScope())
-            {
-                try{
-
-                    var dbContext = scope.ServiceProvider.GetRequiredService<WebhookContext>();
-                    dbContext.Database.Migrate();
-                }
-                catch(Exception ex)
-                {
-                    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-                    logger.LogError(ex, "An error occurred while migrating or initializing the database.");
-                }
-
-                
-            }
-
+            // SQLite Database Migration (COMMENTED OUT - using S3 instead)
+            // using(var scope = app.Services.CreateScope())
+            // {
+            //     try{
+            //         var dbContext = scope.ServiceProvider.GetRequiredService<WebhookContext>();
+            //         dbContext.Database.Migrate();
+            //     }
+            //     catch(Exception ex)
+            //     {
+            //         var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+            //         logger.LogError(ex, "An error occurred while migrating or initializing the database.");
+            //     }
+            // }
 
             // Configure the HTTP request pipeline.
             if (!app.Environment.IsDevelopment())

@@ -24,21 +24,30 @@ namespace WebhookTester.Services
                 {
                     using (var scope = _serviceProvider.CreateScope())
                     {
-                        var context = scope.ServiceProvider.GetRequiredService<WebhookContext>();
+                        var s3Storage = scope.ServiceProvider.GetRequiredService<S3StorageService>();
                         
-                        // Delete webhooks created more than 30 days ago
+                        // Delete webhook REQUESTS older than 30 days
+                        // NOTE: Endpoints are NOT deleted - only requests are cleaned up
                         var cutoffDate = DateTime.UtcNow.AddDays(-30);
                         
-                        var oldWebhooks = await context.WebhookEndpoints
-                            .Where(w => w.CreatedAt < cutoffDate)
-                            .ToListAsync(stoppingToken);
-
-                        if (oldWebhooks.Any())
+                        var deletedCount = await s3Storage.DeleteOldRequestsAsync(cutoffDate);
+                        
+                        if (deletedCount > 0)
                         {
-                            context.WebhookEndpoints.RemoveRange(oldWebhooks);
-                            await context.SaveChangesAsync(stoppingToken);
-                            _logger.LogInformation("Deleted {count} old webhooks.", oldWebhooks.Count);
+                            _logger.LogInformation("Deleted {count} old webhook requests.", deletedCount);
                         }
+                        
+                        // SQLite code (COMMENTED OUT - using S3 instead):
+                        // var context = scope.ServiceProvider.GetRequiredService<WebhookContext>();
+                        // var oldWebhooks = await context.WebhookEndpoints
+                        //     .Where(w => w.CreatedAt < cutoffDate)
+                        //     .ToListAsync(stoppingToken);
+                        // if (oldWebhooks.Any())
+                        // {
+                        //     context.WebhookEndpoints.RemoveRange(oldWebhooks);
+                        //     await context.SaveChangesAsync(stoppingToken);
+                        //     _logger.LogInformation("Deleted {count} old webhooks.", oldWebhooks.Count);
+                        // }
                     }
                 }
                 catch (Exception ex)
@@ -46,8 +55,8 @@ namespace WebhookTester.Services
                     _logger.LogError(ex, "Error occurred during cleanup.");
                 }
 
-                // Run once a day
-                await Task.Delay(TimeSpan.FromDays(1), stoppingToken);
+                // Run once a month
+                await Task.Delay(TimeSpan.FromDays(30), stoppingToken);
             }
         }
     }
