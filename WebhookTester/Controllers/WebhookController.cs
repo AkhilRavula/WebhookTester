@@ -34,6 +34,14 @@ namespace WebhookTester.Controllers
                 return NotFound();
             }
 
+            // Read body ONCE
+            byte[] bodyBytes;
+            using (var memoryStream = new MemoryStream())
+            {
+                await Request.Body.CopyToAsync(memoryStream);
+                bodyBytes = memoryStream.ToArray();
+            }
+
             if (endpoint.HasPassword)
             {
                 string? eventSigningSignature = Request.Headers["signature-256"];
@@ -45,7 +53,7 @@ namespace WebhookTester.Controllers
                     }
                 }
 
-                if (string.IsNullOrEmpty(eventSigningSignature) || CheckForSignature(eventSigningSignature, endpoint.PasswordHash))
+                if (string.IsNullOrEmpty(eventSigningSignature) || CheckForSignature(eventSigningSignature, endpoint.PasswordHash, bodyBytes))
                 {
                     return Unauthorized("Invalid or missing signature.");
                 }
@@ -64,31 +72,25 @@ namespace WebhookTester.Controllers
                 StatusCodeSentBack = 200
             };
 
-            // Read body
-            using (var memoryStream = new MemoryStream())
+            // Use the already-read bodyBytes
+            var bytes = bodyBytes;
+            if (bytes.Length > 1024 * 1024)
             {
-                Request.Body.Position = 0;
-                await Request.Body.CopyToAsync(memoryStream);
-                var bytes = memoryStream.ToArray();
-                
-                if (bytes.Length > 1024 * 1024)
-                {
-                    var truncatedBytes = new byte[1024 * 1024];
-                    Array.Copy(bytes, truncatedBytes, 1024 * 1024);
-                    bytes = truncatedBytes;
-                    requestRecord.IsBodyTruncated = true;
-                }
+                var truncatedBytes = new byte[1024 * 1024];
+                Array.Copy(bytes, truncatedBytes, 1024 * 1024);
+                bytes = truncatedBytes;
+                requestRecord.IsBodyTruncated = true;
+            }
 
-                if (IsBinary(bytes))
-                {
-                    requestRecord.Body = Convert.ToBase64String(bytes);
-                    requestRecord.IsBodyBase64Encoded = true;
-                }
-                else
-                {
-                    requestRecord.Body = Encoding.UTF8.GetString(bytes);
-                    requestRecord.IsBodyBase64Encoded = false;
-                }
+            if (IsBinary(bytes))
+            {
+                requestRecord.Body = Convert.ToBase64String(bytes);
+                requestRecord.IsBodyBase64Encoded = true;
+            }
+            else
+            {
+                requestRecord.Body = Encoding.UTF8.GetString(bytes);
+                requestRecord.IsBodyBase64Encoded = false;
             }
 
             _context.WebhookRequests.Add(requestRecord);
@@ -110,14 +112,9 @@ namespace WebhookTester.Controllers
             return Ok("OK");
         }
 
-        private bool CheckForSignature(string signature, string passwordHash)
+        // Change signature to accept bodyBytes
+        private bool CheckForSignature(string signature, string passwordHash, byte[] bodyBytes)
         {
-
-            Request.Body.Position = 0;
-            using var memoryStream = new MemoryStream();
-            Request.Body.CopyTo(memoryStream);
-            var bodyBytes = memoryStream.ToArray();
-
             // Compute HMAC-SHA256 using the endpoint's PasswordHash as the key
             var keyBytes = Encoding.UTF8.GetBytes(passwordHash);
             using var hmac = new HMACSHA256(keyBytes);
