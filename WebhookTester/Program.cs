@@ -5,6 +5,7 @@ using WebhookTester.Services;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Options;
 using Amazon.S3;
+using Microsoft.AspNetCore.HttpOverrides;
 
 namespace WebhookTester
 {
@@ -13,6 +14,14 @@ namespace WebhookTester
         public static void Main(string[] args)
         {
             var builder = WebApplication.CreateBuilder(args);
+
+            // Configure forwarded headers for load balancer
+            builder.Services.Configure<ForwardedHeadersOptions>(options =>
+            {
+                options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+                options.KnownNetworks.Clear();
+                options.KnownProxies.Clear();
+            });
 
             // Add services to the container.
             builder.Services.AddRazorPages();
@@ -39,6 +48,9 @@ namespace WebhookTester
 
             var app = builder.Build();
 
+            // Use forwarded headers from load balancer (MUST be first middleware)
+            app.UseForwardedHeaders();
+
             // SQLite Database Migration (COMMENTED OUT - using S3 instead)
             // using(var scope = app.Services.CreateScope())
             // {
@@ -61,7 +73,7 @@ namespace WebhookTester
                 app.UseHsts();
             }
 
-            //app.UseHttpsRedirection();
+            app.UseHttpsRedirection();
             app.UseStaticFiles();
 
             app.UseRouting();
